@@ -96,10 +96,8 @@ public class Transformer {
 
     private void initializeConversion() {
         appendToScript("// Powered by Infostretch \n\n");
-        appendToScript("timestamps {\n");
     }
     private void finalizeConversion(boolean commitJenkinsfile, String commitMessage) {
-        appendToScript("\n}\n}");
         appendScriptToXML(commitJenkinsfile, commitMessage);
         writeConfiguration();
     }
@@ -130,11 +128,18 @@ public class Transformer {
     }
 
     protected void transformDocument() throws ParserConfigurationException {
+        boolean timestamps = getElementByTag(doc, "hudson.plugins.timestamper.TimestamperBuildWrapper") != null;
+        if (timestamps) {
+            appendToScript("timestamps {\n");
+        }
         dest = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
         flowDefinition = dest.createElement("flow-definition");
         dest.appendChild(flowDefinition);
         doc.getDocumentElement().normalize();
         transformFile();
+        if (timestamps) {
+            appendToScript("\n}\n}");
+        }
     }
 
     /**
