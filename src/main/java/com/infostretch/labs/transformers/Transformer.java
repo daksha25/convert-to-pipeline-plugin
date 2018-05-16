@@ -27,6 +27,7 @@ import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import javax.xml.parsers.DocumentBuilderFactory;
+import javax.xml.parsers.ParserConfigurationException;
 import javax.xml.transform.OutputKeys;
 import javax.xml.transform.TransformerFactory;
 import javax.xml.transform.dom.DOMSource;
@@ -35,10 +36,7 @@ import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.lang.reflect.Constructor;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.logging.Logger;
 
 /**
@@ -80,13 +78,30 @@ public class Transformer {
      * Initialises transformation process of Freestyle project to Pipeline.
      */
     public void performFreeStyleTransformation() {
-        appendToScript("// Powered by Infostretch \n\n");
-        appendToScript("timestamps {\n");
+        initializeConversion();
         transformJob((FreeStyleProject) requestParams.get("initialProject"), (boolean)requestParams.get("downStream"));
-        appendToScript("\n}\n}");
-        appendScriptToXML((boolean) requestParams.get("commitJenkinsfile"), requestParams.get("commitMessage").toString());
-        writeConfiguration();
+        finalizeConversion((boolean) requestParams.get("commitJenkinsfile"), requestParams.get("commitMessage").toString());
         logger.info("Completed conversion of all jobs");
+    }
+
+    /** For testing pureposes */
+    public String transformXml(Document doc, String jobName) throws ParserConfigurationException {
+        initializeConversion();
+        this.doc = doc;
+        this.currentJobName = jobName;
+        transformDocument();
+        finalizeConversion(false, "");
+        return script.toString();
+    }
+
+    private void initializeConversion() {
+        appendToScript("// Powered by Infostretch \n\n");
+        //appendToScript("timestamps {\n");
+    }
+    private void finalizeConversion(boolean commitJenkinsfile, String commitMessage) {
+        //appendToScript("\n}\n}");
+        appendScriptToXML(commitJenkinsfile, commitMessage);
+        writeConfiguration();
     }
 
     /**
@@ -100,11 +115,7 @@ public class Transformer {
         try {
             currentJobName = item.getFullName();
             doc = DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(item.getConfigFile().getFile());
-            dest = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
-            flowDefinition = dest.createElement("flow-definition");
-            dest.appendChild(flowDefinition);
-            doc.getDocumentElement().normalize();
-            transformFile();
+            transformDocument();
             if (downStream) {
                 for (Item job : item.getDownstreamProjects()) {
                     if (job instanceof FreeStyleProject) {
@@ -117,6 +128,22 @@ public class Transformer {
             logger.severe("Exception occurred in Transformer constructor: " + e.getMessage());
         }
     }
+
+    protected void transformDocument() throws ParserConfigurationException {
+    	boolean timestamps = getElementByTag(doc, "hudson.plugins.timestamper.TimestamperBuildWrapper") != null;
+    	       if (timestamps) {
+    	            appendToScript("timestamps {\n");
+    	        }
+    	       dest = DocumentBuilderFactory.newInstance().newDocumentBuilder().newDocument();
+    	         flowDefinition = dest.createElement("flow-definition");
+    	         dest.appendChild(flowDefinition);
+    	         doc.getDocumentElement().normalize();
+    	         transformFile();
+    	        if (timestamps) {
+    	            appendToScript("\n}\n}");
+    	        }
+    	     }
+        
 
     /**
      * Returns the input stream which consists of the entire XML structure of the new pipeline job.
